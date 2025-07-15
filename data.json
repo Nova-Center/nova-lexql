@@ -1,0 +1,54 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "name": "Alice",
+      "age": 28,
+      "city": "Paris",
+      "salary": 45000,
+      "details": {
+        "department": "IT",
+        "skills": ["Python", "SQL", "JavaScript"]
+      }
+    },
+    {
+      "id": 2,
+      "name": "Bob",
+      "age": 35,
+      "city": "London",
+      "salary": 52000,
+      "details": {
+        "department": "Finance",
+        "skills": ["Excel", "SQL", "R"]
+      }
+    },
+    {
+      "id": 3,
+      "name": "Charlie",
+      "age": 31,
+      "city": "Berlin",
+      "salary": 48000,
+      "details": {
+        "department": "Marketing",
+        "skills": ["Analytics", "Social Media"]
+      }
+    }
+  ],
+  "orders": [
+    {
+      "order_id": 101,
+      "user_id": 1,
+      "amount": 150
+    },
+    {
+      "order_id": 102,
+      "user_id": 2,
+      "amount": 200
+    },
+    {
+      "order_id": 103,
+      "user_id": 1,
+      "amount": 75
+    }
+  ]
+}

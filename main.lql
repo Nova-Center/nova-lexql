@@ -1,0 +1,13 @@
+SELECT name, details 
+FROM users 
+WHERE city == "Paris" 
+OR "Python" IN details.skills;
+
+COUNT FROM users 
+WHERE salary > 45000;
+
+AVG salary FROM users;
+
+SELECT name, details.skills 
+FROM users 
+WHERE details.department == "IT";
