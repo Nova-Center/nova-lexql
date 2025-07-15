@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 
-from genereTreeGraphviz2 import printTreeGraph
+from utils.genereTreeGraphviz2 import printTreeGraph
 import json
-import re
 from typing import Any, Dict, List, Union
 
-# Mots réservés du langage
 reserved = {
     "SELECT": "SELECT",
     "FROM": "FROM",
@@ -15,9 +13,11 @@ reserved = {
     "IN": "IN",
     "COUNT": "COUNT",
     "AVG": "AVG",
+    "SUM": "SUM",
+    "MIN": "MIN",
+    "MAX": "MAX",
 }
 
-# Définition des tokens
 tokens = [
     "NUMBER",
     "STRING",
@@ -35,9 +35,9 @@ tokens = [
     "RPAREN",
     "LBRACKET",
     "RBRACKET",
+    "MULTIPLY",
 ] + list(reserved.values())
 
-# Règles des tokens simples
 t_DOT = r"\."
 t_COMMA = r","
 t_SEMI = r";"
@@ -51,11 +51,12 @@ t_LPAREN = r"\("
 t_RPAREN = r"\)"
 t_LBRACKET = r"\["
 t_RBRACKET = r"\]"
+t_MULTIPLY = r"\*"
 
 
 def t_STRING(t):
     r'"[^"]*"'
-    t.value = t.value[1:-1]  # Enlève les guillemets
+    t.value = t.value[1:-1]
     return t
 
 
@@ -71,7 +72,6 @@ def t_IDENTIFIER(t):
     return t
 
 
-# Ignorer les espaces et les commentaires
 def t_COMMENT(t):
     r"//.*"
     pass
@@ -85,24 +85,20 @@ def t_error(t):
     t.lexer.skip(1)
 
 
-# Construction du lexer
 import ply.lex as lex
 
 lexer = lex.lex()
 
-# Variables globales pour stocker les données
 json_data: Dict[str, List[Dict[str, Any]]] = {}
 
 
 def load_json_file(file_path: str) -> None:
-    """Charge un fichier JSON dans la mémoire."""
     global json_data
     with open(file_path, "r") as f:
         json_data = json.load(f)
 
 
 def get_value_from_path(obj: Dict[str, Any], path: Union[str, tuple]) -> Any:
-    """Récupère une valeur à partir d'un chemin JSON (e.g., 'details.skills')."""
     if isinstance(path, tuple):
         path = ".".join(path)
     parts = path.split(".")
@@ -117,11 +113,13 @@ def get_value_from_path(obj: Dict[str, Any], path: Union[str, tuple]) -> Any:
     return current
 
 
-# Règles de grammaire
 def p_query(p):
     """query : select_query SEMI
     | count_query SEMI
-    | avg_query SEMI"""
+    | avg_query SEMI
+    | sum_query SEMI
+    | min_query SEMI
+    | max_query SEMI"""
     p[0] = p[1]
 
 
@@ -139,18 +137,20 @@ def p_select_query(p):
     result = []
     for row in json_data[table]:
         if where is None or eval_condition(row, where):
-            selected = {}
-            for field in fields:
-                # Si le champ contient un point, c'est un chemin JSON
-                if "." in field:
-                    value = get_value_from_path(row, field)
-                    if value is not None:
-                        selected[field] = value
-                else:
-                    if field in row:
-                        selected[field] = row[field]
-            if selected:  # N'ajouter que si des champs ont été sélectionnés
-                result.append(selected)
+            if "*" in fields:
+                result.append(row)
+            else:
+                selected = {}
+                for field in fields:
+                    if "." in field:
+                        value = get_value_from_path(row, field)
+                        if value is not None:
+                            selected[field] = value
+                    else:
+                        if field in row:
+                            selected[field] = row[field]
+                if selected:
+                    result.append(selected)
 
     print(json.dumps(result, indent=2, ensure_ascii=False))
     p[0] = result
@@ -160,9 +160,13 @@ def p_field_list(p):
     """field_list : IDENTIFIER
     | IDENTIFIER DOT IDENTIFIER
     | field_list COMMA IDENTIFIER
-    | field_list COMMA IDENTIFIER DOT IDENTIFIER"""
+    | field_list COMMA IDENTIFIER DOT IDENTIFIER
+    | MULTIPLY"""
     if len(p) == 2:
-        p[0] = [p[1]]
+        if p[1] == "*":
+            p[0] = ["*"]
+        else:
+            p[0] = [p[1]]
     elif len(p) == 4:
         if p[2] == ".":
             p[0] = [f"{p[1]}.{p[3]}"]
@@ -190,9 +194,15 @@ def p_condition(p):
         elif p[2] in ["AND", "OR"]:
             p[0] = ("logical", p[2], p[1], p[3])
         else:
-            p[0] = ("condition", p[1], p[2], p[3])
+            if p[2] == "IN" and isinstance(p[1], str) and p[1].startswith('"'):
+                p[0] = ("condition", p[3], p[2], p[1].strip('"'))
+            else:
+                p[0] = ("condition", p[1], p[2], p[3])
     elif len(p) == 6:
-        p[0] = ("condition", f"{p[1]}.{p[3]}", p[4], p[5])
+        if p[4] == "IN" and isinstance(p[1], str) and p[1].startswith('"'):
+            p[0] = ("condition", f"{p[3]}.{p[5]}", p[4], p[1].strip('"'))
+        else:
+            p[0] = ("condition", f"{p[1]}.{p[3]}", p[4], p[5])
 
 
 def p_operator(p):
@@ -271,56 +281,126 @@ def p_avg_query(p):
 
     if values:
         avg = sum(values) / len(values)
-        print(f"Average of {field}: {avg}")
+        print(f"Moyenne de {field}: {avg}")
         p[0] = avg
     else:
-        print(f"No numeric values found for {field}")
+        print(f"Aucune valeur numérique trouvée pour {field}")
+        p[0] = None
+
+
+def p_sum_query(p):
+    """sum_query : SUM IDENTIFIER FROM IDENTIFIER where_clause
+    | SUM IDENTIFIER FROM IDENTIFIER"""
+    field = p[2]
+    table = p[4]
+    where = p[5] if len(p) > 5 else None
+
+    if table not in json_data:
+        print(f"Table '{table}' non trouvée")
+        return
+
+    sum = 0
+    for row in json_data[table]:
+        if where is None or eval_condition(row, where):
+            value = get_value_from_path(row, field)
+            if isinstance(value, (int, float)):
+                sum += value
+
+    print(f"Somme de {field}: {sum}")
+    p[0] = sum
+
+
+def p_min_query(p):
+    """min_query : MIN IDENTIFIER FROM IDENTIFIER where_clause
+    | MIN IDENTIFIER FROM IDENTIFIER"""
+    field = p[2]
+    table = p[4]
+    where = p[5] if len(p) > 5 else None
+
+    if table not in json_data:
+        print(f"Table '{table}' non trouvée")
+        return
+
+    min = None
+    for row in json_data[table]:
+        if where is None or eval_condition(row, where):
+            value = get_value_from_path(row, field)
+            if value is not None:
+                if min is None or value < min:
+                    min = value
+
+    if min is not None:
+        print(f"Minimum de {field}: {min}")
+        p[0] = min
+    else:
+        print(f"Aucune valeur trouvée pour {field}")
+        p[0] = None
+
+
+def p_max_query(p):
+    """max_query : MAX IDENTIFIER FROM IDENTIFIER where_clause
+    | MAX IDENTIFIER FROM IDENTIFIER"""
+    field = p[2]
+    table = p[4]
+    where = p[5] if len(p) > 5 else None
+
+    if table not in json_data:
+        print(f"Table '{table}' non trouvée")
+        return
+
+    max = None
+    for row in json_data[table]:
+        if where is None or eval_condition(row, where):
+            value = get_value_from_path(row, field)
+            if value is not None:
+                if max is None or value > max:
+                    max = value
+
+    if max is not None:
+        print(f"Maximum de {field}: {max}")
+        p[0] = max
+    else:
+        print(f"Aucune valeur trouvée pour {field}")
         p[0] = None
 
 
 def eval_condition(row: Dict[str, Any], condition: tuple) -> bool:
-    """Évalue une condition sur une ligne de données."""
     if condition[0] == "condition":
         field, op, value = condition[1:]
-        # Si field est un tuple ou une chaîne avec un point, utiliser get_value_from_path
-        if isinstance(field, tuple) or (isinstance(field, str) and "." in field):
-            row_value = get_value_from_path(row, field)
+
+        if op == "IN":
+            if isinstance(field, str) and "." in field:
+                list_value = get_value_from_path(row, field)
+                return value in list_value if isinstance(list_value, list) else False
+            elif isinstance(value, str) and "." in value:
+                list_value = get_value_from_path(row, value)
+                return field in list_value if isinstance(list_value, list) else False
         else:
-            row_value = row.get(field)
+            if isinstance(field, tuple) or (isinstance(field, str) and "." in field):
+                row_value = get_value_from_path(row, field)
+            else:
+                row_value = row.get(field)
 
-        if row_value is None:
-            return False
+            if row_value is None:
+                return False
 
-        if op == "==":
-            return row_value == value
-        elif op == ">":
-            return row_value > value
-        elif op == "<":
-            return row_value < value
-        elif op == ">=":
-            return row_value >= value
-        elif op == "<=":
-            return row_value <= value
-        elif op == "!=":
-            return row_value != value
-        elif op == "IN":
-            if isinstance(row_value, list):
-                return value in row_value
-            elif isinstance(value, list):
-                return row_value in value
-            return False
+            if op == "==":
+                return row_value == value
+            elif op == ">":
+                return row_value > value
+            elif op == "<":
+                return row_value < value
+            elif op == ">=":
+                return row_value >= value
+            elif op == "<=":
+                return row_value <= value
+            elif op == "!=":
+                return row_value != value
 
     elif condition[0] == "logical":
         op, left, right = condition[1:]
-        print(f"Logical operator: {op}")
-        print(f"Left condition: {left}")
-        print(f"Right condition: {right}")
         left_result = eval_condition(row, left)
-        print(f"Left result: {left_result}")
-        if op == "AND" and not left_result:  # Short-circuit AND
-            return False
         right_result = eval_condition(row, right)
-        print(f"Right result: {right_result}")
         if op == "AND":
             return left_result and right_result
         elif op == "OR":
@@ -336,14 +416,12 @@ def p_error(p):
         print("Erreur de syntaxe à la fin de l'entrée")
 
 
-# Construction du parser
 import ply.yacc as yacc
 
 parser = yacc.yacc()
 
 
 def execute_query(query: str) -> Any:
-    """Exécute une requête LexQL."""
     try:
         result = parser.parse(query)
         return result
@@ -355,14 +433,12 @@ def execute_query(query: str) -> Any:
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) != 2:
-        print("Usage: python lexql.py <fichier.lql>")
+    if len(sys.argv) != 3:
+        print("Usage: python lexql.py <fichier.lql> <fichier.json>")
         sys.exit(1)
 
-    # Charge le fichier JSON de données
-    load_json_file("data.json")
+    load_json_file(sys.argv[2])
 
-    # Lit et exécute le fichier .lql
     with open(sys.argv[1], "r") as f:
         queries = f.read()
         for query in queries.split(";"):

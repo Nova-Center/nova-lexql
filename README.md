@@ -1,51 +1,36 @@
-# LexQL - JSON Query Language
+# LexQL
 
-LexQL est un langage de requête original conçu pour manipuler des documents JSON de manière intuitive, combinant la simplicité de SQL avec la flexibilité du JSON.
+LexQL est un interpréteur SQL personnalisé qui permet d'effectuer des requêtes de type SQL sur des fichiers JSON. Il offre une syntaxe familière pour interroger et analyser des données JSON de manière simple et efficace.
 
-## Syntaxe de base
+## Fonctionnalités
 
-```
-// Sélection simple
-SELECT FROM users WHERE age > 30;
-
-// Sélection avec projection
-SELECT name, age FROM users WHERE city == "Paris";
-
-// Sélection avec chemin JSON
-SELECT details.skills FROM users WHERE details.department == "IT";
-
-// Agrégation
-COUNT FROM users WHERE salary > 45000;
-AVG salary FROM users;
-
-// Jointure
-JOIN users, orders ON users.id == orders.user_id;
-
-// Mise à jour
-UPDATE users SET salary = 50000 WHERE id == 1;
-
-// Insertion
-INSERT INTO users VALUES {
-    "id": 4,
-    "name": "David",
-    "age": 29
-};
-
-// Suppression
-DELETE FROM users WHERE age < 25;
-```
-
-## Caractéristiques uniques
-
-1. **Navigation JSON native**: Accès aux propriétés imbriquées avec la notation point
-2. **Opérations sur les tableaux**: Manipulation directe des tableaux JSON
-3. **Expressions conditionnelles flexibles**: Support des opérateurs logiques et de comparaison
-4. **Format de sortie personnalisable**: Résultats en JSON ou en tableau
+- Requêtes `SELECT` avec support des champs imbriqués
+- Filtrage avec `WHERE` et opérateurs de comparaison
+- Support des opérations logiques `AND` et `OR`
+- Opérateur `IN` pour la recherche dans les listes
+- Fonctions d'agrégation : `COUNT`, `AVG`, `SUM`, `MIN`, `MAX`
+- Support des chemins imbriqués avec la notation point (.)
 
 ## Installation
 
-1. Assurez-vous d'avoir Python 3.x installé
-2. Installez les dépendances:
+1. Clonez le dépôt :
+
+```bash
+git clone [url-du-repo]
+cd nova-lexql
+```
+
+2. Créez un environnement virtuel et activez-le :
+
+```bash
+python -m venv venv
+# Sur Windows
+venv\Scripts\activate
+# Sur Unix/MacOS
+source venv/bin/activate
+```
+
+3. Installez les dépendances :
 
 ```bash
 pip install -r requirements.txt
@@ -53,16 +38,116 @@ pip install -r requirements.txt
 
 ## Utilisation
 
+Pour exécuter des requêtes LexQL, vous avez besoin de deux fichiers :
+
+- Un fichier `.lql` contenant vos requêtes
+- Un fichier `.json` contenant vos données
+
+Exécutez le script avec la commande :
+
 ```bash
-python lexql.py fichier.lql
+python lexql.py <fichier.lql> <fichier.json>
 ```
 
-## Exemple
+### Exemples de requêtes
+
+1. Sélection simple avec condition :
 
 ```sql
-// Exemple de requête LexQL
+SELECT name, details
+FROM users
+WHERE city == "Paris";
+```
+
+2. Utilisation de l'opérateur IN avec des champs imbriqués :
+
+```sql
 SELECT name, details.skills
 FROM users
-WHERE salary > 45000
-AND "Python" IN details.skills;
+WHERE "Python" IN details.skills;
 ```
+
+3. Comptage avec condition :
+
+```sql
+COUNT FROM users
+WHERE salary > 45000;
+```
+
+4. Calcul de moyenne :
+
+```sql
+AVG salary FROM users;
+```
+
+5. Calcul du minimum :
+
+```sql
+MIN amount FROM orders;
+```
+
+6. Calcul du maximum :
+
+```sql
+MAX salary FROM users;
+```
+
+7. Calcul de la somme :
+
+```sql
+SUM amount FROM orders;
+```
+
+8. Sélection de tous les champs :
+
+```sql
+SELECT *
+FROM orders
+WHERE amount > 100;
+```
+
+## Structure des données JSON
+
+Le fichier JSON doit être structuré comme un objet contenant des collections. Exemple :
+
+```json
+{
+  "users": [
+    {
+      "id": 1,
+      "name": "Alice",
+      "details": {
+        "skills": ["Python", "SQL"]
+      }
+    }
+  ]
+}
+```
+
+## Syntaxe supportée
+
+- `SELECT` : Sélection de champs
+
+  - Support des champs multiples : `field1, field2`
+  - Support des champs imbriqués : `details.department`
+  - Sélection complète : `*`
+
+- `FROM` : Spécification de la collection
+
+- `WHERE` : Conditions de filtrage
+
+  - Opérateurs de comparaison : `==`, `>`, `<`, `>=`, `<=`, `!=`
+  - Opérateurs logiques : `AND`, `OR`
+  - Opérateur `IN` pour les listes
+
+- Fonctions d'agrégation :
+  - `COUNT` : Compte le nombre d'éléments
+  - `AVG` : Calcule la moyenne d'un champ numérique
+  - `SUM` : Calcule la somme des valeurs d'un champ
+  - `MIN` : Trouve la valeur minimale d'un champ
+  - `MAX` : Trouve la valeur maximale d'un champ
+
+## Limitations
+
+- Les requêtes doivent se terminer par un point-virgule (;)
+- Pas de support pour les jointures entre collections

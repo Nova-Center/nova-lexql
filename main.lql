@@ -1,7 +1,7 @@
 SELECT name, details 
 FROM users 
 WHERE city == "Paris" 
-OR "Python" IN details.skills;
+AND "Python" IN details.skills;
 
 COUNT FROM users 
 WHERE salary > 45000;
@@ -11,3 +11,13 @@ AVG salary FROM users;
 SELECT name, details.skills 
 FROM users 
 WHERE details.department == "IT";
+
+SELECT * 
+FROM orders 
+WHERE amount > 100;
+
+MIN amount FROM orders;
+
+MAX salary FROM users;
+
+SUM amount FROM orders;
