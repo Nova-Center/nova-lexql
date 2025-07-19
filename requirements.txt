@@ -1,3 +1,5 @@
 ply==3.11
 graphviz==0.20.1
 json5==0.9.14
+flask==3.1.1
+flask-cors==6.0.1
